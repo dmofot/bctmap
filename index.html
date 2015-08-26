@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Map with Leaflet and TopoJSON</title>
+  <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" />
+  <link href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="//rawgithub.com/domoritz/leaflet-locatecontrol/gh-pages/dist/L.Control.Locate.min.css" />
+<!--[if lt IE 9]>
+    <link rel="stylesheet" href="//rawgithub.com/domoritz/leaflet-locatecontrol/gh-pages/dist/L.Control.Locate.ie.min.css"/>
+<![endif]-->
+  <style>
+  *{
+    margin:0;
+    padding:0;
+    -webkit-box-sizing:border-box;
+    -moz-box-sizing:border-box;
+    box-sizing:border-box;
+  }
+  body,html,#worldmap{
+    height:100%;
+  }
+  body{
+    color:#333;
+    font-family:sans-serif;
+  }
+  #worldmap{
+    background:white;
+  }
+  .bct-name{
+    position: absolute;
+    top:2em;
+    right:1em;
+    z-index:6;
+    background:rgba(0,0,0,.75);
+    color:white;
+    padding:.5em .75em;
+    font-size:.85em;
+    display:none;
+  }
+  </style>
+</head>
+<body>
+
+  <div id="worldmap"></div>
+  <div class="bct-name"></div>
+
+  <script src="https://code.jquery.com/jquery-2.1.1.min.js"></script>  
+  <script src="http://d3js.org/topojson.v1.min.js"></script>
+  <script src="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.js"></script>
+  <script src="//rawgithub.com/domoritz/leaflet-locatecontrol/gh-pages/dist/L.Control.Locate.min.js" ></script>
+  
+  <script>
+    // Copyright (c) 2013 Ryan Clark
+    // https://gist.github.com/rclark/5779673
+    L.TopoJSON = L.GeoJSON.extend({
+      addData: function(jsonData) {    
+        if (jsonData.type === "Topology") {
+          for (key in jsonData.objects) {
+            geojson = topojson.feature(jsonData, jsonData.objects[key]);
+            L.GeoJSON.prototype.addData.call(this, geojson);
+          }
+        }    
+        else {
+          L.GeoJSON.prototype.addData.call(this, jsonData);
+        }
+      }  
+    });
+  </script>
+  <script>
+
+    (function(){
+
+    'use strict'
+    
+    /* Basemap Layers */
+    var woodcutOSM = L.tileLayer("//{s}.tiles.mapbox.com/v3/examples.xqwfusor/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      subdomains: ["a", "b", "c", "d"],
+      attribution: 'Tiles <a href="http://www.mapbox.com" target="_blank">Mapbox</a>| Map data (c) <a href="http://www.openstreetmap.org/" target="_blank">OpenStreetMap</a>'
+    });
+
+    var map = L.map('worldmap',{maxZoom:18,minZoom:8}),
+      topoLayer = new L.TopoJSON(),
+      $bctName = $('.bct-name');
+    
+    map.setView([42.48814,-71.25861], 8);
+
+    L.control.locate({
+        position: 'topleft',  // set the location of the control
+        drawCircle: true,  // controls whether a circle is drawn that shows the uncertainty about the location
+        follow: false,  // follow the user's location
+        setView: true, // automatically sets the map view to the user's location, enabled if `follow` is true
+        keepCurrentZoomLevel: false, // keep the current map zoom level when displaying the user's location. (if `false`, use maxZoom)
+        stopFollowingOnDrag: false, // stop following when the map is dragged if `follow` is true (deprecated, see below)
+        remainActive: false, // if true locate control remains active on click even if the user's location is in view.
+        markerClass: L.circleMarker, // L.circleMarker or L.marker
+        circleStyle: {},  // change the style of the circle around the user's location
+        markerStyle: {},
+        followCircleStyle: {},  // set difference for the style of the circle around the user's location while following
+        followMarkerStyle: {},
+        icon: 'fa fa-map-marker',  // class for icon, fa-location-arrow or fa-map-marker
+        iconLoading: 'fa fa-spinner fa-spin',  // class for loading icon
+        circlePadding: [0, 0], // padding around accuracy circle, value is passed to setBounds
+        metric: true,  // use metric or imperial units
+        onLocationError: function(err) {alert(err.message)},  // define an error callback function
+        onLocationOutsideMapBounds:  function(context) { // called when outside map boundaries
+                alert(context.options.strings.outsideMapBoundsMsg);
+        },
+        showPopup: true, // display a popup when the user click on the inner marker
+        strings: {
+            title: "Show me where I am",  // title of the locate control
+            metersUnit: "meters", // string for metric units
+            feetUnit: "feet", // string for imperial units
+            popup: "You are within {distance} {unit} from this point",  // text to appear if user clicks on circle
+            outsideMapBoundsMsg: "You seem located outside the boundaries of the map" // default message for onLocationOutsideMapBounds
+        },
+        locateOptions: {}  // define location options e.g enableHighAccuracy: true or maxZoom: 10
+    }).addTo(map);
+
+    woodcutOSM.addTo(map);
+
+    $.getJSON('data/bct.topojson').done(addTopoData);
+
+    function addTopoData(topoData){
+      topoLayer.addData(topoData);
+      topoLayer.addTo(map);
+      topoLayer.eachLayer(handleLayer);
+    }
+
+    function handleLayer(layer){
+          
+        layer.setStyle({
+          color:'#CC0033',
+          weight:2,
+          opacity:.5
+        });
+
+        layer.on({
+          mouseover : enterLayer,
+          mouseout: leaveLayer
+        });
+    }
+
+    function enterLayer(){
+      var bctName = this.feature.properties.NAME;
+      $bctName.text(bctName).show();
+      
+      this.bringToFront();
+      this.setStyle({
+        weight:3,
+        opacity: 1
+      });
+    }
+
+    function leaveLayer(){
+      $bctName.hide();
+
+      this.bringToBack();
+      this.setStyle({
+        weight:2,
+        opacity:.5
+      });
+    }
+
+    }());
+  </script>
+</body>
+</html>
